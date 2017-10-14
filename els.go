@@ -99,37 +99,37 @@ func getType(v byte) Type {
 }
 
 var sizes = [256]bytespec{
-	Nil:      {size: 1, extra: constsize, typ: NilType},
-	False:    {size: 1, extra: constsize, typ: BoolType},
-	True:     {size: 1, extra: constsize, typ: BoolType},
-	Bin8:     {size: 2, extra: extra8, typ: BinType},
-	Bin16:    {size: 3, extra: extra16, typ: BinType},
-	Bin32:    {size: 5, extra: extra32, typ: BinType},
-	Ext8:     {size: 3, extra: extra8, typ: ExtensionType},
-	Ext16:    {size: 4, extra: extra16, typ: ExtensionType},
-	Ext32:    {size: 6, extra: extra32, typ: ExtensionType},
-	Float32:  {size: 5, extra: constsize, typ: Float32Type},
-	Float64:  {size: 9, extra: constsize, typ: Float64Type},
-	Uint8:    {size: 2, extra: constsize, typ: UintType},
-	Uint16:   {size: 3, extra: constsize, typ: UintType},
-	Uint32:   {size: 5, extra: constsize, typ: UintType},
-	Uint64:   {size: 9, extra: constsize, typ: UintType},
-	Int8:     {size: 2, extra: constsize, typ: IntType},
-	Int16:    {size: 3, extra: constsize, typ: IntType},
-	Int32:    {size: 5, extra: constsize, typ: IntType},
-	Int64:    {size: 9, extra: constsize, typ: IntType},
-	Fixext1:  {size: 3, extra: constsize, typ: ExtensionType},
-	Fixext2:  {size: 4, extra: constsize, typ: ExtensionType},
-	Fixext4:  {size: 6, extra: constsize, typ: ExtensionType},
-	Fixext8:  {size: 10, extra: constsize, typ: ExtensionType},
-	Fixext16: {size: 18, extra: constsize, typ: ExtensionType},
-	Str8:     {size: 2, extra: extra8, typ: StrType},
-	Str16:    {size: 3, extra: extra16, typ: StrType},
-	Str32:    {size: 5, extra: extra32, typ: StrType},
-	Array16:  {size: 3, extra: array16v, typ: ArrayType},
-	Array32:  {size: 5, extra: array32v, typ: ArrayType},
-	Map16:    {size: 3, extra: map16v, typ: MapType},
-	Map32:    {size: 5, extra: map32v, typ: MapType},
+	Nil:      {size: 1, extra: constsize, typ: NilType, name: "Nil"},
+	False:    {size: 1, extra: constsize, typ: BoolType, name: "False"},
+	True:     {size: 1, extra: constsize, typ: BoolType, name: "True"},
+	Bin8:     {size: 2, extra: extra8, typ: BinType, name: "Bin8"},
+	Bin16:    {size: 3, extra: extra16, typ: BinType, name: "Bin16"},
+	Bin32:    {size: 5, extra: extra32, typ: BinType, name: "Bin32"},
+	Ext8:     {size: 3, extra: extra8, typ: ExtensionType, name: "Ext8"},
+	Ext16:    {size: 4, extra: extra16, typ: ExtensionType, name: "Ext16"},
+	Ext32:    {size: 6, extra: extra32, typ: ExtensionType, name: "Ext32"},
+	Float32:  {size: 5, extra: constsize, typ: Float32Type, name: "Float32"},
+	Float64:  {size: 9, extra: constsize, typ: Float64Type, name: "Float64"},
+	Uint8:    {size: 2, extra: constsize, typ: UintType, name: "Uint8"},
+	Uint16:   {size: 3, extra: constsize, typ: UintType, name: "Uint16"},
+	Uint32:   {size: 5, extra: constsize, typ: UintType, name: "Uint32"},
+	Uint64:   {size: 9, extra: constsize, typ: UintType, name: "Uint64"},
+	Int8:     {size: 2, extra: constsize, typ: IntType, name: "Int8"},
+	Int16:    {size: 3, extra: constsize, typ: IntType, name: "Int16"},
+	Int32:    {size: 5, extra: constsize, typ: IntType, name: "Int32"},
+	Int64:    {size: 9, extra: constsize, typ: IntType, name: "Int64"},
+	Fixext1:  {size: 3, extra: constsize, typ: ExtensionType, name: "Fixext1"},
+	Fixext2:  {size: 4, extra: constsize, typ: ExtensionType, name: "Fixext2"},
+	Fixext4:  {size: 6, extra: constsize, typ: ExtensionType, name: "Fixext4"},
+	Fixext8:  {size: 10, extra: constsize, typ: ExtensionType, name: "Fixext8"},
+	Fixext16: {size: 18, extra: constsize, typ: ExtensionType, name: "Fixext16"},
+	Str8:     {size: 2, extra: extra8, typ: StrType, name: "Str8"},
+	Str16:    {size: 3, extra: extra16, typ: StrType, name: "Str16"},
+	Str32:    {size: 5, extra: extra32, typ: StrType, name: "Str32"},
+	Array16:  {size: 3, extra: array16v, typ: ArrayType, name: "Array16"},
+	Array32:  {size: 5, extra: array32v, typ: ArrayType, name: "Array32"},
+	Map16:    {size: 3, extra: map16v, typ: MapType, name: "Map16"},
+	Map32:    {size: 5, extra: map32v, typ: MapType, name: "Map32"},
 }
 
 func init() {
@@ -137,29 +137,33 @@ func init() {
 
 	// fixint
 	for i := Fixint; i < 0x80; i++ {
-		sizes[i] = bytespec{size: 1, extra: constsize, typ: IntType}
+		sizes[i] = bytespec{size: 1, extra: constsize, typ: IntType, name: "Fixint"}
 	}
 
 	// nfixint
 	for i := uint16(FixintNeg); i < 0x100; i++ {
-		sizes[uint8(i)] = bytespec{size: 1, extra: constsize, typ: IntType}
+		sizes[uint8(i)] = bytespec{size: 1, extra: constsize, typ: IntType, name: "FixintNeg"}
 	}
 
 	// fixstr gets constsize,
 	// since the prefix yields the size
 	for i := Fixstr; i < 0xc0; i++ {
-		sizes[i] = bytespec{size: 1 + rfixstr(i), extra: constsize, typ: StrType}
+		sizes[i] = bytespec{size: 1 + rfixstr(i), extra: constsize, typ: StrType, name: "Fixstr"}
 	}
 
 	// fixmap
 	for i := Fixmap; i < 0x90; i++ {
-		sizes[i] = bytespec{size: 1, extra: varmode(2 * rfixmap(i)), typ: MapType}
+		sizes[i] = bytespec{size: 1, extra: varmode(2 * rfixmap(i)), typ: MapType, name: "Fixmap"}
 	}
 
 	// fixarray
 	for i := Fixarray; i < 0xa0; i++ {
-		sizes[i] = bytespec{size: 1, extra: varmode(rfixarray(i)), typ: ArrayType}
+		sizes[i] = bytespec{size: 1, extra: varmode(rfixarray(i)), typ: ArrayType, name: "Fixarray"}
 	}
+}
+
+func prefixName(prefix byte) string {
+	return sizes[prefix].name
 }
 
 const last4 = 0x0f
@@ -176,7 +180,8 @@ func rfixmap(b byte) uint8   { return b & last4 }
 // non-zero 'size' and
 // non-zero 'typ'
 type bytespec struct {
-	size  uint8   // prefix size information
+	size  uint8 // prefix size information
+	name  string
 	extra varmode // extra size information
 	typ   Type    // type
 	_     byte    // makes bytespec 4 bytes (yes, this matters)
