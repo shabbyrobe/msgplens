@@ -6,25 +6,25 @@ type Visitor struct {
 	Begin func(ctx *LensContext) error
 	End   func(ctx *LensContext) error
 
-	Str   func(ctx *LensContext, bts []byte, data string) error
-	Int   func(ctx *LensContext, bts []byte, data int64) error
-	Uint  func(ctx *LensContext, bts []byte, data uint64) error
-	Bin   func(ctx *LensContext, bts []byte, data []byte) error
-	Float func(ctx *LensContext, bts []byte, data float64) error
-	Bool  func(ctx *LensContext, bts []byte, data bool) error
+	Str   func(ctx *LensContext, bts []byte, str string) error
+	Int   func(ctx *LensContext, bts []byte, i int64) error
+	Uint  func(ctx *LensContext, bts []byte, u uint64) error
+	Bin   func(ctx *LensContext, bts []byte, bin []byte) error
+	Float func(ctx *LensContext, bts []byte, f float64) error
+	Bool  func(ctx *LensContext, bts []byte, b bool) error
 	Nil   func(ctx *LensContext, prefix byte) error
 
-	EnterArray     func(ctx *LensContext, prefix byte, len int) error
+	EnterArray     func(ctx *LensContext, prefix byte, cnt int) error
 	EnterArrayElem func(ctx *LensContext, n, cnt int) error
 	LeaveArrayElem func(ctx *LensContext, n, cnt int) error
-	LeaveArray     func(ctx *LensContext) error
+	LeaveArray     func(ctx *LensContext, prefix byte, cnt int, bts []byte) error
 
-	EnterMap     func(ctx *LensContext, prefix byte, len int) error
+	EnterMap     func(ctx *LensContext, prefix byte, cnt int) error
 	EnterMapKey  func(ctx *LensContext, n, cnt int) error
 	LeaveMapKey  func(ctx *LensContext, n, cnt int) error
 	EnterMapElem func(ctx *LensContext, n, cnt int) error
 	LeaveMapElem func(ctx *LensContext, n, cnt int) error
-	LeaveMap     func(ctx *LensContext) error
+	LeaveMap     func(ctx *LensContext, prefix byte, cnt int, bts []byte) error
 
 	Extension func(ctx *LensContext, bts []byte) error
 }
@@ -72,7 +72,8 @@ func (c *LensContext) walkRoot() error {
 	return nil
 }
 
-func (c *LensContext) walkArray(contents []byte, bts, objs uintptr) error {
+func (c *LensContext) walkArray(contents []byte, objs uintptr) error {
+	start := c.last
 	if c.vis.EnterArray != nil {
 		if err := c.vis.EnterArray(c, contents[0], int(objs)); err != nil {
 			return err
@@ -94,14 +95,15 @@ func (c *LensContext) walkArray(contents []byte, bts, objs uintptr) error {
 		}
 	}
 	if c.vis.LeaveArray != nil {
-		if err := c.vis.LeaveArray(c); err != nil {
+		if err := c.vis.LeaveArray(c, contents[0], int(objs), c.bts[start:c.cur]); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (c *LensContext) walkMap(contents []byte, bts, objs uintptr) error {
+func (c *LensContext) walkMap(contents []byte, objs uintptr) error {
+	start := c.last
 	lim := int(objs) / 2
 
 	if c.vis.EnterMap != nil {
@@ -138,7 +140,7 @@ func (c *LensContext) walkMap(contents []byte, bts, objs uintptr) error {
 		}
 	}
 	if c.vis.LeaveMap != nil {
-		if err := c.vis.LeaveMap(c); err != nil {
+		if err := c.vis.LeaveMap(c, contents[0], lim, c.bts[start:c.cur]); err != nil {
 			return err
 		}
 	}
@@ -151,22 +153,22 @@ func (c *LensContext) walk() error {
 	}
 
 	typ := getType(c.bts[c.cur])
-	bts, objs, err := getSize(c.bts[c.cur:])
+	sz, objs, err := getSize(c.bts[c.cur:])
 	if err != nil {
 		return err
 	}
 
-	contents := c.bts[c.cur : c.cur+int(bts)]
+	contents := c.bts[c.cur : c.cur+int(sz)]
 	c.last = c.cur
-	c.cur += int(bts)
+	c.cur += int(sz)
 
 	switch typ {
 	case ArrayType:
-		if err := c.walkArray(contents, bts, objs); err != nil {
+		if err := c.walkArray(contents, objs); err != nil {
 			return err
 		}
 	case MapType:
-		if err := c.walkMap(contents, bts, objs); err != nil {
+		if err := c.walkMap(contents, objs); err != nil {
 			return err
 		}
 	case StrType:

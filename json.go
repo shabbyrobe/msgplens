@@ -46,11 +46,11 @@ func NewJSONEncoder() *JSONEncoder {
 			return nil
 		},
 
-		EnterArray:  func(ctx *LensContext, prefix byte, len int) error { je.buf.WriteByte('['); return nil },
-		LeaveArray:  func(ctx *LensContext) error { je.buf.WriteByte(']'); return nil },
-		EnterMap:    func(ctx *LensContext, prefix byte, len int) error { je.buf.WriteByte('{'); return nil },
+		EnterArray:  func(ctx *LensContext, prefix byte, cnt int) error { je.buf.WriteByte('['); return nil },
+		LeaveArray:  func(ctx *LensContext, prefix byte, cnt int, bts []byte) error { je.buf.WriteByte(']'); return nil },
+		EnterMap:    func(ctx *LensContext, prefix byte, cnt int) error { je.buf.WriteByte('{'); return nil },
 		LeaveMapKey: func(ctx *LensContext, n, cnt int) error { je.buf.WriteByte(':'); return nil },
-		LeaveMap:    func(ctx *LensContext) error { je.buf.WriteByte('}'); return nil },
+		LeaveMap:    func(ctx *LensContext, prefix byte, cnt int, bts []byte) error { je.buf.WriteByte('}'); return nil },
 
 		LeaveArrayElem: func(ctx *LensContext, n, cnt int) error {
 			if n < cnt-1 {

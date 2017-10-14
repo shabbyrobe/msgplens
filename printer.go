@@ -2,10 +2,25 @@ package msgplens
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"regexp"
 	"strings"
+)
+
+const (
+	styleKeyLen         = 4
+	styleTypeLen        = 8
+	styleAttrNameLen    = 4
+	styleAttrValueLen   = 4
+	styleAttrNameColor  = darkGray
+	styleAttrValueColor = lightGray
+	styleKeyIndexColor  = lightMagenta
+	styleKeyTypeColor   = magenta
+	styleIntColor       = green
+	styleFloatColor     = yellow
+	styleStringColor    = lightBlue
 )
 
 type Printer struct {
@@ -15,9 +30,14 @@ type Printer struct {
 }
 
 func (p *Printer) printType(ctx *LensContext, prefix byte, size int) {
-	p.w.write(color(lightGray, "at:"), color(green, ctx.Pos()), " ")
-	p.w.write(color(lightGray, "sz:"), color(green, size), " ")
-	p.w.write(color(cyan, prefixName(prefix)), " ")
+	p.w.writef("%s%[2]*s",
+		colorw(styleAttrNameColor, "at:"),
+		styleAttrValueLen, colorw(styleAttrValueColor, ctx.Pos()))
+	p.w.writef("%s%[2]*s",
+		colorw(styleAttrNameColor, "sz:"),
+		styleAttrValueLen, colorw(styleAttrValueColor, size))
+	p.w.writef("%[1]*s", styleTypeLen, colorw(cyan, prefixName(prefix)))
+	p.w.write(" ")
 }
 
 func NewPrinter(out io.Writer) *Printer {
@@ -31,19 +51,19 @@ func NewPrinter(out io.Writer) *Printer {
 	p.vis = &Visitor{
 		Str: func(ctx *LensContext, bts []byte, str string) error {
 			p.printType(ctx, bts[0], len(bts))
-			p.w.write(fmt.Sprintf("%q", str))
+			p.w.write(color(styleStringColor, fmt.Sprintf("%q", str)))
 			p.w.writeln()
 			return nil
 		},
 		Int: func(ctx *LensContext, bts []byte, data int64) error {
 			p.printType(ctx, bts[0], len(bts))
-			p.w.write(fmt.Sprintf("%d", data))
+			p.w.writef("%d", colorw(styleIntColor, data))
 			p.w.writeln()
 			return nil
 		},
 		Uint: func(ctx *LensContext, bts []byte, data uint64) error {
 			p.printType(ctx, bts[0], len(bts))
-			p.w.write(fmt.Sprintf("%d", data))
+			p.w.writef("%d", colorw(styleIntColor, data))
 			p.w.writeln()
 			return nil
 		},
@@ -54,7 +74,7 @@ func NewPrinter(out io.Writer) *Printer {
 		},
 		Float: func(ctx *LensContext, bts []byte, data float64) error {
 			p.printType(ctx, bts[0], len(bts))
-			p.w.write(fmt.Sprintf("%f", data))
+			p.w.write(color(styleFloatColor, fmt.Sprintf("%g", data)))
 			p.w.writeln()
 			return nil
 		},
@@ -72,50 +92,55 @@ func NewPrinter(out io.Writer) *Printer {
 			p.w.writeln(prefixName(bts[0]))
 			return nil
 		},
-		EnterArray: func(ctx *LensContext, prefix byte, len int) error {
-			p.printType(ctx, prefix, 1)
-			p.w.write(color(lightGray, "len:"), color(green, len))
-			p.w.writeln()
+		EnterArray: func(ctx *LensContext, prefix byte, cnt int) error {
+			p.w.write(color(styleAttrNameColor, "len:"), color(styleAttrValueColor, cnt))
+			p.w.write(" [")
+			if cnt > 0 {
+				p.w.writeln()
+			}
 			p.w.depth++
 			return nil
 		},
 		EnterArrayElem: func(ctx *LensContext, n, cnt int) error {
-			p.w.write(color(lightBlue, n), " ")
+			p.w.writef("%[1]*s", styleKeyLen, colorw(styleKeyIndexColor, n))
 			return nil
 		},
 		LeaveArrayElem: func(ctx *LensContext, n, cnt int) error {
 			return nil
 		},
-		LeaveArray: func(ctx *LensContext) error {
+		LeaveArray: func(ctx *LensContext, prefix byte, cnt int, bts []byte) error {
 			p.w.depth--
+			p.w.writeln("]")
 			return nil
 		},
 
-		EnterMap: func(ctx *LensContext, prefix byte, len int) error {
+		EnterMap: func(ctx *LensContext, prefix byte, cnt int) error {
 			p.printType(ctx, prefix, 1)
-			p.w.write(color(lightGray, "len:"), color(green, len))
-			p.w.writeln()
+			p.w.write(color(lightGray, "len:"), color(green, cnt))
+			p.w.write(" {")
+			if cnt > 0 {
+				p.w.writeln()
+			}
 			p.w.depth++
 			return nil
 		},
 		EnterMapKey: func(ctx *LensContext, n, cnt int) error {
-			p.w.write(color(blue, "K"))
-			p.w.write(color(lightBlue, n), " ")
+			p.w.writef("%[1]*s", styleKeyLen, colorw(styleKeyTypeColor, "K").Append(styleKeyIndexColor, n))
 			return nil
 		},
 		LeaveMapKey: func(ctx *LensContext, n, cnt int) error {
 			return nil
 		},
 		EnterMapElem: func(ctx *LensContext, n, cnt int) error {
-			p.w.write(color(blue, "V"))
-			p.w.write(color(lightBlue, n), " ")
+			p.w.writef("%[1]*s", styleKeyLen, colorw(styleKeyTypeColor, "V").Append(styleKeyIndexColor, n))
 			return nil
 		},
 		LeaveMapElem: func(ctx *LensContext, n, cnt int) error {
 			return nil
 		},
-		LeaveMap: func(ctx *LensContext) error {
+		LeaveMap: func(ctx *LensContext, prefix byte, cnt int, bts []byte) error {
 			p.w.depth--
+			p.w.writeln("}")
 			return nil
 		},
 		End: func(ctx *LensContext) error {
@@ -242,10 +267,10 @@ func color(col int, v interface{}) string {
 }
 
 type colorOut struct {
-	in  string
-	col int
-	len int
-	pad byte
+	out    string
+	len    int
+	pad    byte
+	padCol int
 }
 
 func (c colorOut) Pad(b byte) colorOut {
@@ -260,25 +285,36 @@ func (c colorOut) Format(f fmt.State, r rune) {
 		if pad == 0 {
 			pad = ' '
 		}
-		if f.Flag('-') {
-			f.Write([]byte(colorPadLeft(c.col, c.in, ln, pad)))
-		} else {
-			f.Write([]byte(colorPadRight(c.col, c.in, ln, pad)))
+		diff := ln - c.len
+		neg := f.Flag('-')
+		if neg && diff > 0 {
+			f.Write(bytes.Repeat([]byte{pad}, diff))
+		}
+		f.Write([]byte(c.out))
+		if !neg && diff > 0 {
+			f.Write(bytes.Repeat([]byte{pad}, diff))
 		}
 	} else {
-		f.Write([]byte(color(c.col, c.in)))
+		f.Write([]byte(c.out))
 	}
 }
 
+func (c colorOut) Append(col int, v interface{}) colorOut {
+	s := fmt.Sprintf("%v", v)
+	c.out += color(col, s)
+	c.len += len(s)
+	return c
+}
+
 func (c colorOut) String() string {
-	return color(c.col, c.in)
+	return c.out
 }
 
 func colorw(col int, v interface{}) colorOut {
 	s := fmt.Sprintf("%v", v)
+	out := color(col, s)
 	return colorOut{
-		in:  s,
-		col: col,
+		out: out,
 		len: len(s),
 	}
 }
