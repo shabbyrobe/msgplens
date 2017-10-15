@@ -54,6 +54,14 @@ func run() error {
 		outEncoding string
 	)
 
+	if len(os.Args) == 1 {
+		// Check if we have anything to read from STDIN. If not, print help.
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			return usageError{}
+		}
+	}
+
 	flag.StringVar(&inFormat, "inf", "msgp", "Input format")
 	flag.StringVar(&outFormat, "outf", "print", "Output format")
 	flag.StringVar(&inEncoding, "inenc", "", "Input encoding")
