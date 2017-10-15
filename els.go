@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// Copied directly from http://github.com/tinylib/msgp/msgp
+// Contains portions adapted from http://github.com/tinylib/msgp/msgp
 
 // Copyright (c) 2014 Philip Hofer
 // Portions Copyright (c) 2009 The Go Authors (license at http://golang.org) where indicated

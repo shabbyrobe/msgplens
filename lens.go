@@ -2,17 +2,20 @@ package msgplens
 
 import "fmt"
 
+// Visitor provides functions that will be called as a msgpack object
+// is walked for each different kind of child object that is encountered.
 type Visitor struct {
 	Begin func(ctx *LensContext) error
 	End   func(ctx *LensContext) error
 
-	Str   func(ctx *LensContext, bts []byte, str string) error
-	Int   func(ctx *LensContext, bts []byte, i int64) error
-	Uint  func(ctx *LensContext, bts []byte, u uint64) error
-	Bin   func(ctx *LensContext, bts []byte, bin []byte) error
-	Float func(ctx *LensContext, bts []byte, f float64) error
-	Bool  func(ctx *LensContext, bts []byte, b bool) error
-	Nil   func(ctx *LensContext, prefix byte) error
+	Str     func(ctx *LensContext, bts []byte, str string) error
+	Int     func(ctx *LensContext, bts []byte, i int64) error
+	Uint    func(ctx *LensContext, bts []byte, u uint64) error
+	Bin     func(ctx *LensContext, bts []byte, bin []byte) error
+	Float32 func(ctx *LensContext, bts []byte, f float32) error
+	Float64 func(ctx *LensContext, bts []byte, f float64) error
+	Bool    func(ctx *LensContext, bts []byte, b bool) error
+	Nil     func(ctx *LensContext, prefix byte) error
 
 	EnterArray     func(ctx *LensContext, prefix byte, cnt int) error
 	EnterArrayElem func(ctx *LensContext, n, cnt int) error
@@ -33,6 +36,8 @@ type Visitable interface {
 	Visitor() *Visitor
 }
 
+// WalkBytes walks the bytes in a msgpack object and visits each of the types
+// using the Visitor created by a Visitable.
 func WalkBytes(v Visitable, bts []byte) error {
 	ctx := &LensContext{
 		bts: bts,
@@ -153,6 +158,7 @@ func (c *LensContext) walk() error {
 	}
 
 	typ := getType(c.bts[c.cur])
+	prefix := c.bts[c.cur]
 	sz, objs, err := getSize(c.bts[c.cur:])
 	if err != nil {
 		return err
@@ -173,7 +179,9 @@ func (c *LensContext) walk() error {
 		}
 	case StrType:
 		if c.vis.Str != nil {
-			if err := c.vis.Str(c, contents, string(contents[1:])); err != nil {
+			idx := 1
+			idx += -int(sizes[prefix].extra)
+			if err := c.vis.Str(c, contents, string(contents[idx:])); err != nil {
 				return err
 			}
 		}
@@ -199,7 +207,9 @@ func (c *LensContext) walk() error {
 		}
 	case BinType:
 		if c.vis.Bin != nil {
-			if err := c.vis.Bin(c, contents, contents[1:]); err != nil {
+			idx := 1
+			idx += -int(sizes[prefix].extra)
+			if err := c.vis.Bin(c, contents, contents[idx:]); err != nil {
 				return err
 			}
 		}
@@ -216,22 +226,22 @@ func (c *LensContext) walk() error {
 			}
 		}
 	case Float64Type:
-		if c.vis.Float != nil {
+		if c.vis.Float64 != nil {
 			f, err := readFloat64(contents)
 			if err != nil {
 				return err
 			}
-			if err := c.vis.Float(c, contents, f); err != nil {
+			if err := c.vis.Float64(c, contents, f); err != nil {
 				return err
 			}
 		}
 	case Float32Type:
-		if c.vis.Float != nil {
+		if c.vis.Float32 != nil {
 			f, err := readFloat32(contents)
 			if err != nil {
 				return err
 			}
-			if err := c.vis.Float(c, contents, float64(f)); err != nil {
+			if err := c.vis.Float32(c, contents, f); err != nil {
 				return err
 			}
 		}

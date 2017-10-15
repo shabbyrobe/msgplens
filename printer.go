@@ -36,8 +36,14 @@ func (p *Printer) printType(ctx *LensContext, prefix byte, size int) {
 	p.w.writef("%s%[2]*s",
 		colorw(styleAttrNameColor, "sz:"),
 		styleAttrValueLen, colorw(styleAttrValueColor, size))
+
+	p.w.write(color(lightCyan, fmt.Sprintf("0x%02x (%03d) ", prefix, prefix)))
 	p.w.writef("%[1]*s", styleTypeLen, colorw(cyan, prefixName(prefix)))
 	p.w.write(" ")
+}
+
+func (p *Printer) Flush() error {
+	return p.w.Flush()
 }
 
 func NewPrinter(out io.Writer) *Printer {
@@ -72,7 +78,13 @@ func NewPrinter(out io.Writer) *Printer {
 			p.w.writeln(prefixName(bts[0]))
 			return nil
 		},
-		Float: func(ctx *LensContext, bts []byte, data float64) error {
+		Float64: func(ctx *LensContext, bts []byte, data float64) error {
+			p.printType(ctx, bts[0], len(bts))
+			p.w.write(color(styleFloatColor, fmt.Sprintf("%g", data)))
+			p.w.writeln()
+			return nil
+		},
+		Float32: func(ctx *LensContext, bts []byte, data float32) error {
 			p.printType(ctx, bts[0], len(bts))
 			p.w.write(color(styleFloatColor, fmt.Sprintf("%g", data)))
 			p.w.writeln()
@@ -93,6 +105,7 @@ func NewPrinter(out io.Writer) *Printer {
 			return nil
 		},
 		EnterArray: func(ctx *LensContext, prefix byte, cnt int) error {
+			p.printType(ctx, prefix, 1)
 			p.w.write(color(styleAttrNameColor, "len:"), color(styleAttrValueColor, cnt))
 			p.w.write(" [")
 			if cnt > 0 {
@@ -116,7 +129,7 @@ func NewPrinter(out io.Writer) *Printer {
 
 		EnterMap: func(ctx *LensContext, prefix byte, cnt int) error {
 			p.printType(ctx, prefix, 1)
-			p.w.write(color(lightGray, "len:"), color(green, cnt))
+			p.w.write(color(styleAttrNameColor, "len:"), color(styleAttrValueColor, cnt))
 			p.w.write(" {")
 			if cnt > 0 {
 				p.w.writeln()
