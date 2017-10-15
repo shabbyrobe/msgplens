@@ -11,12 +11,15 @@ import (
 
 // UnmarshalJSON unmarshals a lossy JSON representation of a msgpack object
 // into a Node.
-func UnmarshalJSON(b []byte) (Node, error) {
+func UnmarshalJSON(b []byte, extra bool) (Node, error) {
 	var intf interface{}
 	decoder := json.NewDecoder(bytes.NewReader(b))
 	decoder.UseNumber()
 	if err := decoder.Decode(&intf); err != nil {
 		return nil, err
+	}
+	if decoder.More() && !extra {
+		return nil, fmt.Errorf("extra bytes after JSON object")
 	}
 	node, err := jsonIntfToNode(intf)
 	if err != nil {
@@ -49,7 +52,10 @@ func jsonIntfToNode(intf interface{}) (Node, error) {
 			}
 			bits := make([]byte, 8)
 			byteOrder.PutUint64(bits, math.Float64bits(n))
-			return &NumberNode{commonNode: commonNode{Prefix: Float64, Size: int(sizes[Float64].size)}, Bits: bits}, nil
+			return &FloatNode{
+				commonNode: commonNode{Prefix: Float64, Size: int(sizes[Float64].size)},
+				Bits:       bits,
+				Approx:     n}, nil
 
 		} else {
 			n, err := v.Int64()
@@ -57,29 +63,42 @@ func jsonIntfToNode(intf interface{}) (Node, error) {
 				return nil, err
 			}
 			bits := make([]byte, 8)
+
 			var prefix byte
+			var node Node
+
 			switch {
 			case n >= 0 && n < 128:
 				prefix = wfixint(byte(n))
+				node = &IntNode{Approx: n, Bits: bits}
 			case n < 0 && n >= -32 && isnfixint(byte(n)):
 				prefix = wnfixint(int8(n))
+				node = &IntNode{Approx: n, Bits: bits}
 			case n >= 128 && n < math.MaxUint8:
 				prefix = Uint8
+				node = &UintNode{Approx: uint64(n), Bits: bits}
 			case n >= math.MaxUint8 && n < math.MaxUint16:
 				prefix = Uint16
+				node = &UintNode{Approx: uint64(n), Bits: bits}
 			case n >= math.MaxUint16 && n < math.MaxUint32:
 				prefix = Uint32
+				node = &UintNode{Approx: uint64(n), Bits: bits}
 			case n < 0 && n >= math.MinInt8:
 				prefix = Int8
+				node = &IntNode{Approx: n, Bits: bits}
 			case n < math.MinInt8 && n >= math.MinInt16:
 				prefix = Int16
+				node = &IntNode{Approx: n, Bits: bits}
 			case n < math.MinInt16 && n >= math.MinInt32:
 				prefix = Int16
+				node = &IntNode{Approx: n, Bits: bits}
 			default:
 				prefix = Int64
+				node = &IntNode{Approx: n, Bits: bits}
 			}
 			byteOrder.PutUint64(bits, uint64(n))
-			return &NumberNode{commonNode: commonNode{Prefix: prefix, Size: int(sizes[prefix].size)}, Bits: bits}, nil
+			node.setCommon(prefix, int(sizes[prefix].size))
+			return node, nil
 		}
 
 	case string:

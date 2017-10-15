@@ -12,6 +12,9 @@ var byteOrder = binary.BigEndian
 
 type Node interface {
 	Msgpack(into *bytes.Buffer) error
+	TotalSize() int
+
+	setCommon(prefix uint8, size int)
 }
 
 type commonNode struct {
@@ -19,12 +22,22 @@ type commonNode struct {
 	Size   int
 }
 
-type NumberNode struct {
-	commonNode
-	Bits []byte
+func (c *commonNode) setCommon(prefix uint8, size int) {
+	c.Prefix = prefix
+	c.Size = size
 }
 
-func (n *NumberNode) Msgpack(into *bytes.Buffer) error {
+func (c *commonNode) TotalSize() int {
+	return c.Size
+}
+
+type FloatNode struct {
+	commonNode
+	Bits   []byte
+	Approx float64
+}
+
+func (n *FloatNode) Msgpack(into *bytes.Buffer) error {
 	typ := sizes[n.Prefix].typ
 	switch typ {
 	case Float64Type:
@@ -35,6 +48,21 @@ func (n *NumberNode) Msgpack(into *bytes.Buffer) error {
 		into.WriteByte(n.Prefix)
 		into.Write(n.Bits)
 
+	default:
+		return fmt.Errorf("unexpected number type %s", typ)
+	}
+	return nil
+}
+
+type IntNode struct {
+	commonNode
+	Bits   []byte
+	Approx int64
+}
+
+func (n *IntNode) Msgpack(into *bytes.Buffer) error {
+	typ := sizes[n.Prefix].typ
+	switch typ {
 	case IntType:
 		if isfixint(n.Prefix) || isnfixint(n.Prefix) {
 			into.WriteByte(n.Prefix)
@@ -64,6 +92,21 @@ func (n *NumberNode) Msgpack(into *bytes.Buffer) error {
 			}
 		}
 
+	default:
+		return fmt.Errorf("unexpected number type %s", typ)
+	}
+	return nil
+}
+
+type UintNode struct {
+	commonNode
+	Bits   []byte
+	Approx uint64
+}
+
+func (n *UintNode) Msgpack(into *bytes.Buffer) error {
+	typ := sizes[n.Prefix].typ
+	switch typ {
 	case UintType:
 		if isfixint(n.Prefix) {
 			into.WriteByte(n.Prefix)
@@ -128,6 +171,10 @@ func (e *ExtensionNode) Msgpack(into *bytes.Buffer) error {
 	return nil
 }
 
+func (e *ExtensionNode) TotalSize() int {
+	return e.Size + len(e.Contents)
+}
+
 type StrNode struct {
 	commonNode
 	Value string
@@ -142,6 +189,10 @@ func (s *StrNode) Msgpack(into *bytes.Buffer) error {
 	into.Write(bs)
 	into.WriteString(s.Value)
 	return nil
+}
+
+func (s *StrNode) TotalSize() int {
+	return s.Size + len(s.Value)
 }
 
 type BinNode struct {
@@ -159,6 +210,10 @@ func (b *BinNode) Msgpack(into *bytes.Buffer) error {
 	into.Write(bs)
 	into.Write(b.Value)
 	return nil
+}
+
+func (b *BinNode) TotalSize() int {
+	return b.Size + len(b.Value)
 }
 
 type ArrayNode struct {
@@ -180,6 +235,14 @@ func (a *ArrayNode) Msgpack(into *bytes.Buffer) error {
 		}
 	}
 	return nil
+}
+
+func (a *ArrayNode) TotalSize() int {
+	sz := a.Size
+	for _, c := range a.Children {
+		sz += c.TotalSize()
+	}
+	return sz
 }
 
 type MapNode struct {
@@ -204,6 +267,14 @@ func (m *MapNode) Msgpack(into *bytes.Buffer) error {
 		}
 	}
 	return nil
+}
+
+func (m *MapNode) TotalSize() int {
+	sz := m.Size
+	for _, c := range m.Values {
+		sz += c.Key.TotalSize() + c.Value.TotalSize()
+	}
+	return sz
 }
 
 type KeyValueNode struct {
@@ -286,13 +357,13 @@ func ReprUnmarshalNode(in []byte) (Node, error) {
 	case BoolType:
 		node = &BoolNode{}
 	case IntType:
-		node = &NumberNode{}
+		node = &IntNode{}
 	case UintType:
-		node = &NumberNode{}
+		node = &UintNode{}
 	case Float64Type:
-		node = &NumberNode{}
+		node = &FloatNode{}
 	case Float32Type:
-		node = &NumberNode{}
+		node = &FloatNode{}
 	case NilType:
 		node = &NilNode{}
 	case ExtensionType:
@@ -326,71 +397,92 @@ func (r *Representer) Nodes() []Node {
 func NewRepresenter() *Representer {
 	r := &Representer{}
 	r.nodes = &r.root
-	numberNode := func(ctx *LensContext, prefix byte, sz int, bts []byte) error {
-		*r.nodes = append(*r.nodes, &NumberNode{
-			commonNode: commonNode{Prefix: prefix, Size: sz},
-			Bits:       bts})
-		return nil
-	}
+
 	r.vis = &Visitor{
 		Int: func(ctx *LensContext, bts []byte, data int64) error {
 			bits := make([]byte, 8)
 			byteOrder.PutUint64(bits, uint64(data))
-			return numberNode(ctx, bts[0], len(bts), bits)
+			*r.nodes = append(*r.nodes, &IntNode{
+				commonNode: commonNode{Prefix: bts[0], Size: len(bts)},
+				Bits:       bts,
+				Approx:     data})
+			return nil
 		},
+
 		Uint: func(ctx *LensContext, bts []byte, data uint64) error {
 			bits := make([]byte, 8)
 			byteOrder.PutUint64(bits, data)
-			return numberNode(ctx, bts[0], len(bts), bits)
+			*r.nodes = append(*r.nodes, &UintNode{
+				commonNode: commonNode{Prefix: bts[0], Size: len(bts)},
+				Bits:       bts,
+				Approx:     data})
+			return nil
 		},
+
 		Float64: func(ctx *LensContext, bts []byte, data float64) error {
 			bits := make([]byte, 8)
 			byteOrder.PutUint64(bits, math.Float64bits(data))
-			return numberNode(ctx, bts[0], len(bts), bits)
+			*r.nodes = append(*r.nodes, &FloatNode{
+				commonNode: commonNode{Prefix: bts[0], Size: len(bts)},
+				Bits:       bts,
+				Approx:     data})
+			return nil
 		},
+
 		Float32: func(ctx *LensContext, bts []byte, data float32) error {
 			bits := make([]byte, 4)
 			byteOrder.PutUint32(bits, math.Float32bits(data))
-			return numberNode(ctx, bts[0], len(bts), bits)
+			*r.nodes = append(*r.nodes, &FloatNode{
+				commonNode: commonNode{Prefix: bts[0], Size: len(bts)},
+				Bits:       bts,
+				Approx:     float64(data)})
+			return nil
 		},
+
 		Str: func(ctx *LensContext, bts []byte, str string) error {
 			*r.nodes = append(*r.nodes, &StrNode{
 				commonNode: commonNode{Prefix: bts[0], Size: len(bts)},
 				Value:      str})
 			return nil
 		},
+
 		Bin: func(ctx *LensContext, bts []byte, data []byte) error {
 			*r.nodes = append(*r.nodes, &BinNode{
 				commonNode: commonNode{Prefix: bts[0], Size: len(bts)},
 				Value:      data})
 			return nil
 		},
+
 		Bool: func(ctx *LensContext, bts []byte, data bool) error {
 			*r.nodes = append(*r.nodes, &BoolNode{
 				commonNode: commonNode{Prefix: bts[0], Size: len(bts)},
 				Value:      data})
 			return nil
 		},
+
 		Nil: func(ctx *LensContext, prefix byte) error {
 			*r.nodes = append(*r.nodes, &NilNode{
 				commonNode: commonNode{Prefix: Nil, Size: 1}})
 			return nil
 		},
+
 		Extension: func(ctx *LensContext, bts []byte) error {
 			*r.nodes = append(*r.nodes, &ExtensionNode{
 				commonNode: commonNode{Prefix: bts[0], Size: len(bts)},
 				Contents:   bts})
 			return nil
 		},
+
 		EnterArray: func(ctx *LensContext, prefix byte, objects int) error {
 			an := &ArrayNode{
-				commonNode: commonNode{Prefix: prefix, Size: objects},
+				commonNode: commonNode{Prefix: prefix, Size: int(sizes[prefix].size)},
 			}
 			*r.nodes = append(*r.nodes, an)
 			r.stack = append(r.stack, r.nodes)
 			r.nodes = &an.Children
 			return nil
 		},
+
 		LeaveArray: func(ctx *LensContext, prefix byte, cnt int, bts []byte) error {
 			r.stack, r.nodes = r.stack[0:len(r.stack)-1], r.stack[len(r.stack)-1]
 			return nil
@@ -402,9 +494,10 @@ func NewRepresenter() *Representer {
 			r.nodes = &m
 			return nil
 		},
+
 		LeaveMap: func(ctx *LensContext, prefix byte, cnt int, bts []byte) error {
 			mn := &MapNode{
-				commonNode: commonNode{Prefix: prefix, Size: cnt},
+				commonNode: commonNode{Prefix: prefix, Size: int(sizes[prefix].size)},
 			}
 			ln := len(*r.nodes)
 			for i := 0; i < ln; i += 2 {
@@ -415,6 +508,13 @@ func NewRepresenter() *Representer {
 			}
 			r.stack, r.nodes = r.stack[0:len(r.stack)-1], r.stack[len(r.stack)-1]
 			*r.nodes = append(*r.nodes, mn)
+			return nil
+		},
+
+		End: func(ctx *LensContext, left []byte) error {
+			*r.nodes = append(*r.nodes, &BinNode{
+				commonNode: commonNode{Prefix: Bin32, Size: len(left)},
+				Value:      left})
 			return nil
 		},
 	}

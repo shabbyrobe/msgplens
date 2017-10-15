@@ -6,7 +6,7 @@ import "fmt"
 // is walked for each different kind of child object that is encountered.
 type Visitor struct {
 	Begin func(ctx *LensContext) error
-	End   func(ctx *LensContext) error
+	End   func(ctx *LensContext, left []byte) error
 
 	Str     func(ctx *LensContext, bts []byte, str string) error
 	Int     func(ctx *LensContext, bts []byte, i int64) error
@@ -70,7 +70,7 @@ func (c *LensContext) walkRoot() error {
 		return fmt.Errorf("walk failed at position %d/%d: %v", c.cur, c.cnt, err)
 	}
 	if c.vis.End != nil {
-		if err := c.vis.End(c); err != nil {
+		if err := c.vis.End(c, c.bts[c.cur:]); err != nil {
 			return err
 		}
 	}

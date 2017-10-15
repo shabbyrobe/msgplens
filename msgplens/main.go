@@ -22,6 +22,7 @@ Options:
   -outf <fmt>    Output format
   -inenc <enc>   Input encoding (optional)
   -outenc <enc>  Input encoding (optional)
+  -extra         Allow extra data after input if the formats allow
 
 Formats:
   msgp   Msgpack (default input, output)
@@ -52,6 +53,7 @@ func run() error {
 		outFormat   string
 		inEncoding  string
 		outEncoding string
+		extra       bool
 	)
 
 	if len(os.Args) == 1 {
@@ -62,15 +64,31 @@ func run() error {
 		}
 	}
 
+	isPipedOut := true
+	stat, _ := os.Stdout.Stat()
+	if (stat.Mode() & os.ModeCharDevice) != 0 {
+		isPipedOut = false
+	}
+
 	flag.StringVar(&inFormat, "inf", "msgp", "Input format")
-	flag.StringVar(&outFormat, "outf", "print", "Output format")
+	flag.StringVar(&outFormat, "outf", "", "Output format")
 	flag.StringVar(&inEncoding, "inenc", "", "Input encoding")
 	flag.StringVar(&outEncoding, "outenc", "", "Output encoding")
+	flag.BoolVar(&extra, "extra", false, "Whether extra data after input is allowed")
 	flag.Parse()
+
+	if outFormat == "" {
+		if !isPipedOut {
+			outFormat = "print"
+		} else {
+			outFormat = "msgp"
+		}
+	}
 
 	var rdr io.Reader = os.Stdin
 	var wrt io.WriteCloser = os.Stdout
 
+	// Input encoding:
 	switch inEncoding {
 	case "hex":
 		rdr = msgplens.NewHexDecoder(rdr, 0)
@@ -107,6 +125,7 @@ func run() error {
 		return fmt.Errorf("unknown input encoding %s", inEncoding)
 	}
 
+	// Output encoding:
 	switch outEncoding {
 	case "base64":
 		fallthrough
@@ -121,12 +140,16 @@ func run() error {
 
 	if inFormat == "msgp" && outFormat == "print" {
 		enc := msgplens.NewPrinter(wrt)
-		msgplens.WalkBytes(enc, in)
+		enc.AllowExtra = extra
+		if err := msgplens.WalkBytes(enc, in); err != nil {
+			return err
+		}
 
 	} else if inFormat == outFormat {
 		wrt.Write(in)
 
 	} else {
+		// Convert input into Node
 		var node msgplens.Node
 		switch inFormat {
 		case "repr":
@@ -136,20 +159,28 @@ func run() error {
 			}
 
 		case "json":
-			node, err = msgplens.UnmarshalJSON(in)
+			node, err = msgplens.UnmarshalJSON(in, extra)
 			if err != nil {
 				return err
 			}
 
 		case "msgp":
 			repr := msgplens.NewRepresenter()
-			msgplens.WalkBytes(repr, in)
-			node = repr.Nodes()[0]
+			if err := msgplens.WalkBytes(repr, in); err != nil {
+				return err
+			}
+			nodes := repr.Nodes()
+			node = nodes[0]
+			bsz := node.TotalSize()
+			if !extra && len(nodes) > 1 {
+				return fmt.Errorf("extra data in msgpack input %d", bsz)
+			}
 
 		default:
 			return usageError{fmt.Sprintf("Unknown input format %s", inFormat)}
 		}
 
+		// Render Node to output
 		switch outFormat {
 		case "repr":
 			m, err := json.Marshal(node)
@@ -172,7 +203,9 @@ func run() error {
 				return err
 			}
 			enc := msgplens.NewJSONEncoder()
-			msgplens.WalkBytes(enc, buf.Bytes())
+			if err := msgplens.WalkBytes(enc, buf.Bytes()); err != nil {
+				return err
+			}
 			io.WriteString(wrt, enc.String())
 
 		case "print":
@@ -181,7 +214,9 @@ func run() error {
 				return err
 			}
 			enc := msgplens.NewPrinter(wrt)
-			msgplens.WalkBytes(enc, buf.Bytes())
+			if err := msgplens.WalkBytes(enc, buf.Bytes()); err != nil {
+				return err
+			}
 			if err := enc.Flush(); err != nil {
 				return err
 			}

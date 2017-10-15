@@ -27,6 +27,8 @@ type Printer struct {
 	vis *Visitor
 	out io.Writer
 	w   *writer
+
+	AllowExtra bool
 }
 
 func (p *Printer) printType(ctx *LensContext, prefix byte, size int) {
@@ -61,49 +63,58 @@ func NewPrinter(out io.Writer) *Printer {
 			p.w.writeln()
 			return nil
 		},
+
 		Int: func(ctx *LensContext, bts []byte, data int64) error {
 			p.printType(ctx, bts[0], len(bts))
 			p.w.writef("%d", colorw(styleIntColor, data))
 			p.w.writeln()
 			return nil
 		},
+
 		Uint: func(ctx *LensContext, bts []byte, data uint64) error {
 			p.printType(ctx, bts[0], len(bts))
 			p.w.writef("%d", colorw(styleIntColor, data))
 			p.w.writeln()
 			return nil
 		},
+
 		Bin: func(ctx *LensContext, bts []byte, data []byte) error {
 			p.printType(ctx, bts[0], len(bts))
 			p.w.writeln(prefixName(bts[0]))
 			return nil
 		},
+
 		Float64: func(ctx *LensContext, bts []byte, data float64) error {
 			p.printType(ctx, bts[0], len(bts))
 			p.w.write(color(styleFloatColor, fmt.Sprintf("%g", data)))
 			p.w.writeln()
 			return nil
 		},
+
 		Float32: func(ctx *LensContext, bts []byte, data float32) error {
 			p.printType(ctx, bts[0], len(bts))
 			p.w.write(color(styleFloatColor, fmt.Sprintf("%g", data)))
 			p.w.writeln()
 			return nil
 		},
+
 		Bool: func(ctx *LensContext, bts []byte, data bool) error {
 			p.printType(ctx, bts[0], len(bts))
 			p.w.writeln()
 			return nil
 		},
+
 		Nil: func(ctx *LensContext, prefix byte) error {
 			p.printType(ctx, prefix, 1)
 			p.w.writeln()
 			return nil
 		},
+
 		Extension: func(ctx *LensContext, bts []byte) error {
 			p.w.writeln(prefixName(bts[0]))
 			return nil
 		},
+
 		EnterArray: func(ctx *LensContext, prefix byte, cnt int) error {
 			p.printType(ctx, prefix, 1)
 			p.w.write(color(styleAttrNameColor, "len:"), color(styleAttrValueColor, cnt))
@@ -114,13 +125,16 @@ func NewPrinter(out io.Writer) *Printer {
 			p.w.depth++
 			return nil
 		},
+
 		EnterArrayElem: func(ctx *LensContext, n, cnt int) error {
 			p.w.writef("%[1]*s", styleKeyLen, colorw(styleKeyIndexColor, n))
 			return nil
 		},
+
 		LeaveArrayElem: func(ctx *LensContext, n, cnt int) error {
 			return nil
 		},
+
 		LeaveArray: func(ctx *LensContext, prefix byte, cnt int, bts []byte) error {
 			p.w.depth--
 			p.w.writeln("]")
@@ -137,27 +151,57 @@ func NewPrinter(out io.Writer) *Printer {
 			p.w.depth++
 			return nil
 		},
+
 		EnterMapKey: func(ctx *LensContext, n, cnt int) error {
 			p.w.writef("%[1]*s", styleKeyLen, colorw(styleKeyTypeColor, "K").Append(styleKeyIndexColor, n))
 			return nil
 		},
+
 		LeaveMapKey: func(ctx *LensContext, n, cnt int) error {
 			return nil
 		},
+
 		EnterMapElem: func(ctx *LensContext, n, cnt int) error {
 			p.w.writef("%[1]*s", styleKeyLen, colorw(styleKeyTypeColor, "V").Append(styleKeyIndexColor, n))
 			return nil
 		},
+
 		LeaveMapElem: func(ctx *LensContext, n, cnt int) error {
 			return nil
 		},
+
 		LeaveMap: func(ctx *LensContext, prefix byte, cnt int, bts []byte) error {
 			p.w.depth--
 			p.w.writeln("}")
 			return nil
 		},
-		End: func(ctx *LensContext) error {
-			return p.w.Flush()
+
+		End: func(ctx *LensContext, left []byte) (err error) {
+			lln := len(left)
+			if lln > 0 {
+				p.w.writeln()
+				p.w.writelnf("%d bytes remaining:", lln)
+				p.w.depth++
+				for i, b := range left {
+					p.w.writef("%x", b)
+					if i > 0 && i%25 == 0 {
+						p.w.writeln()
+					} else if i > 0 && i%2 == 1 {
+						p.w.write(" ")
+					}
+				}
+				p.w.depth--
+				p.w.writeln()
+
+				if !p.AllowExtra {
+					err = fmt.Errorf("%d bytes found at end of input", lln)
+				}
+			}
+			ferr := p.w.Flush()
+			if err == nil {
+				err = ferr
+			}
+			return
 		},
 	}
 	return p
@@ -218,7 +262,7 @@ func (w *writer) writeln(strs ...string) {
 
 func (w *writer) writelnf(line string, args ...interface{}) {
 	w.writef(line, args...)
-	w.WriteByte('\n')
+	w.writeln()
 }
 
 var spaceOnly = regexp.MustCompile(`^[ \t]+$`)
