@@ -1,9 +1,40 @@
 package msgplens
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 )
+
+type HexEncoder struct {
+	wrt   io.Writer
+	tmp   []byte
+	tmpsz int
+}
+
+func NewHexEncoder(wrt io.Writer, buf []byte) *HexEncoder {
+	if buf == nil {
+		buf = make([]byte, 8192)
+	}
+	return &HexEncoder{wrt: wrt, tmp: buf, tmpsz: len(buf)}
+}
+
+func (h *HexEncoder) Close() error {
+	if wc, ok := h.wrt.(io.WriteCloser); ok {
+		return wc.Close()
+	}
+	return nil
+}
+
+func (h *HexEncoder) Write(buf []byte) (n int, err error) {
+	n = hex.EncodedLen(len(buf))
+	if n < h.tmpsz {
+		h.tmp = make([]byte, n)
+	}
+	_ = hex.Encode(h.tmp, buf)
+	_, err = h.wrt.Write(h.tmp[:n])
+	return
+}
 
 // HexDecoder is a pretty janky attempt at making a fairly liberal hex-decoding
 // Reader without resorting to crazy regular expressions. I'm not sure this is
@@ -14,7 +45,9 @@ import (
 // It'll eat this for breakfast, brackets included: [0x01, 0x1, 1, ff, FF, 0xfF]
 //
 // It will also accept a continuous stream of hex characters, which it will
-// process 2 characters at a time, i.e. "ABCD" is equivalent to "0xab 0xcd".
+// process 2 characters at a time or until a separator is encountered. In this
+// mode, "ABCD" is equivalent to "0xab 0xcd", however "ABC\nD" is equivalent to
+// "0xab 0x0c 0x0d".
 //
 type HexDecoder struct {
 	in   io.Reader

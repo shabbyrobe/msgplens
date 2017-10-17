@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -78,7 +79,7 @@ func run() error {
 	flag.Parse()
 
 	if outFormat == "" {
-		if !isPipedOut {
+		if !isPipedOut && outEncoding == "" {
 			outFormat = "print"
 		} else {
 			outFormat = "msgp"
@@ -131,6 +132,14 @@ func run() error {
 		fallthrough
 	case "b64":
 		wrt = base64.NewEncoder(base64.StdEncoding, wrt)
+	case "hexdump":
+		wrt = hex.Dumper(wrt)
+	case "hex":
+		wrt = msgplens.NewHexEncoder(wrt, nil)
+	case "":
+		// all good!
+	default:
+		return fmt.Errorf("unknown output encoding %s", outEncoding)
 	}
 
 	in, err := ioutil.ReadAll(rdr)
