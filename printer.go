@@ -183,12 +183,12 @@ func NewPrinter(out io.Writer) *Printer {
 				p.w.writelnf("%d bytes remaining:", lln)
 				p.w.depth++
 				for i, b := range left {
-					p.w.writef("%x", b)
-					if i > 0 && i%25 == 0 {
+					if i > 0 && i%26 == 0 {
 						p.w.writeln()
-					} else if i > 0 && i%2 == 1 {
+					} else if i > 0 && i%2 == 0 {
 						p.w.write(" ")
 					}
+					p.w.writef("%02x", b)
 				}
 				p.w.depth--
 				p.w.writeln()

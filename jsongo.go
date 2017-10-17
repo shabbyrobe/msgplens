@@ -43,8 +43,8 @@ func (j *JSONEncoder) writeJSONString(s string) {
 				// user-controlled strings are rendered into JSON
 				// and served to some browsers.
 				j.buf.WriteString(`\u00`)
-				j.buf.WriteByte(hex[b>>4])
-				j.buf.WriteByte(hex[b&0xF])
+				j.buf.WriteByte(hexChars[b>>4])
+				j.buf.WriteByte(hexChars[b&0xF])
 			}
 			i++
 			start = i
@@ -72,7 +72,7 @@ func (j *JSONEncoder) writeJSONString(s string) {
 				j.buf.WriteString(s[start:i])
 			}
 			j.buf.WriteString(`\u202`)
-			j.buf.WriteByte(hex[c&0xF])
+			j.buf.WriteByte(hexChars[c&0xF])
 			i += size
 			start = i
 			continue
@@ -222,4 +222,4 @@ var safeSet = [utf8.RuneSelf]bool{
 	'\u007f': true,
 }
 
-var hex = "0123456789abcdef"
+var hexChars = "0123456789abcdef"

@@ -1,7 +1,7 @@
 package msgplens
 
 func ExampleVisitor_template() {
-	visitor := &Visitor{
+	_ = &Visitor{
 		Str: func(ctx *LensContext, bts []byte, str string) error {
 			return nil
 		},
@@ -14,7 +14,10 @@ func ExampleVisitor_template() {
 		Bin: func(ctx *LensContext, bts []byte, data []byte) error {
 			return nil
 		},
-		Float: func(ctx *LensContext, bts []byte, data float64) error {
+		Float64: func(ctx *LensContext, bts []byte, data float64) error {
+			return nil
+		},
+		Float32: func(ctx *LensContext, bts []byte, data float32) error {
 			return nil
 		},
 		Bool: func(ctx *LensContext, bts []byte, data bool) error {
@@ -35,7 +38,7 @@ func ExampleVisitor_template() {
 		LeaveArrayElem: func(ctx *LensContext, n, cnt int) error {
 			return nil
 		},
-		LeaveArray: func(ctx *LensContext) error {
+		LeaveArray: func(ctx *LensContext, prefix byte, cnt int, bts []byte) error {
 			return nil
 		},
 
@@ -54,7 +57,7 @@ func ExampleVisitor_template() {
 		LeaveMapElem: func(ctx *LensContext, n, cnt int) error {
 			return nil
 		},
-		LeaveMap: func(ctx *LensContext) error {
+		LeaveMap: func(ctx *LensContext, prefix byte, cnt int, bts []byte) error {
 			return nil
 		},
 	}

@@ -91,7 +91,7 @@ func run() error {
 	// Input encoding:
 	switch inEncoding {
 	case "hex":
-		rdr = msgplens.NewHexDecoder(rdr, 0)
+		rdr = msgplens.NewHexDecoder(rdr, nil)
 
 	case "num":
 		bts, err := ioutil.ReadAll(rdr)

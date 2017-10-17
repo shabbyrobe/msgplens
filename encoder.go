@@ -6,8 +6,16 @@ import (
 )
 
 // HexDecoder is a pretty janky attempt at making a fairly liberal hex-decoding
-// Reader without resorting to regular expressions. Don't use it in your next
-// project.
+// Reader without resorting to crazy regular expressions. I'm not sure this is
+// better. Don't use it in your next project.
+//
+// On the plus side, it tolerates input in lots of formats. You can pass in a
+// delimited list of 1 to 2 digit hex numbers, optionally prefixed with "0x".
+// It'll eat this for breakfast, brackets included: [0x01, 0x1, 1, ff, FF, 0xfF]
+//
+// It will also accept a continuous stream of hex characters, which it will
+// process 2 characters at a time, i.e. "ABCD" is equivalent to "0xab 0xcd".
+//
 type HexDecoder struct {
 	in   io.Reader
 	part []byte
@@ -16,13 +24,13 @@ type HexDecoder struct {
 	pos  int
 }
 
-func NewHexDecoder(rdr io.Reader, sz int) *HexDecoder {
-	if sz <= 0 {
-		sz = 8192
+func NewHexDecoder(rdr io.Reader, buf []byte) *HexDecoder {
+	if buf == nil {
+		buf = make([]byte, 8192)
 	}
 	return &HexDecoder{
 		in:  rdr,
-		buf: make([]byte, sz),
+		buf: buf,
 	}
 }
 
@@ -75,7 +83,7 @@ func (h *HexDecoder) Read(b []byte) (n int, err error) {
 				} else if c >= '1' && c <= '9' {
 					state = hexDecNum
 					goto num
-				} else if c >= 'a' && c <= 'f' {
+				} else if (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
 					state = hexDecNum
 					goto num
 				} else if c == ',' || c == ' ' || c == '\n' || c == '\r' ||
@@ -91,7 +99,7 @@ func (h *HexDecoder) Read(b []byte) (n int, err error) {
 				if c == 'x' {
 					state = hexDecNum
 					continue
-				} else if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') {
+				} else if (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') {
 					state = hexDecNext
 					// fall through
 				} else {
@@ -107,6 +115,8 @@ func (h *HexDecoder) Read(b []byte) (n int, err error) {
 					curByte = c - '0'
 				} else if c >= 'a' && c <= 'f' {
 					curByte = c - 'a' + 10
+				} else if c >= 'A' && c <= 'F' {
+					curByte = c - 'A' + 10
 				} else {
 					err = fmt.Errorf("unexpected num char %c", c)
 					return
@@ -117,6 +127,8 @@ func (h *HexDecoder) Read(b []byte) (n int, err error) {
 					curByte = (curByte << 4) + (c - '0')
 				} else if c >= 'a' && c <= 'f' {
 					curByte = (curByte << 4) + (c - 'a' + 10)
+				} else if c >= 'A' && c <= 'F' {
+					curByte = (curByte << 4) + (c - 'A' + 10)
 				}
 
 				b[idx] = curByte
@@ -125,7 +137,7 @@ func (h *HexDecoder) Read(b []byte) (n int, err error) {
 				idx++
 
 				// this character is not part of the committed byte, i.e. 0xa
-				if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
 					goto again
 				}
 				if idx == inLen {
