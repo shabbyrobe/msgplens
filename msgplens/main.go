@@ -142,6 +142,7 @@ func run() error {
 		return fmt.Errorf("unknown output encoding %s", outEncoding)
 	}
 
+	// FIXME: should try to use readers all the way
 	in, err := ioutil.ReadAll(rdr)
 	if err != nil {
 		return err

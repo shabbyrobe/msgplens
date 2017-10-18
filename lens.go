@@ -57,7 +57,6 @@ type LensContext struct {
 	vis *Visitor
 }
 
-func (c *LensContext) Len() int { return c.cnt }
 func (c *LensContext) Pos() int { return c.last }
 
 func (c *LensContext) walkRoot() error {
