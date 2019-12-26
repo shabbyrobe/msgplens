@@ -1,7 +1,7 @@
 msgplens: Msgpack inspection tool
 =================================
 
-[![GoDoc](https://godoc.org/github.com/shabbyrobe/xmlwriter?status.svg)](https://godoc.org/github.com/shabbyrobe/xmlwriter)
+[![GoDoc](https://godoc.org/github.com/shabbyrobe/msgplens?status.svg)](https://godoc.org/github.com/shabbyrobe/msgplens)
 
 Swiss-army knife for inspecting msgpack objects.
 
