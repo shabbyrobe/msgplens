@@ -9,7 +9,7 @@ Swiss-army knife for inspecting msgpack objects.
 
 To install:
 
-    go get -u github.com/shabbyrobe/msgplens/msgplens
+    go get -u github.com/shabbyrobe/msgplens/cmd/msgplens
 
 `msgplens` has the following features:
 
